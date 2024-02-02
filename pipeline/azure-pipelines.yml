@@ -1,0 +1,58 @@
+# ASP.NET Core (.NET Framework)
+# Build and test ASP.NET Core projects targeting the full .NET Framework.
+# Add steps that publish symbols, save build artifacts, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
+
+trigger:
+- main
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  solution: '**/*.sln'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+  isMain: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
+
+steps:
+- task: NuGetToolInstaller@1
+  displayName:  'Install NuGet Tool'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Restore Packages'
+  inputs:
+    projects: '**/*.csproj'
+    command: 'restore'
+    feedsToUse: 'select'
+    vstsFeed: '42ce21be-6d0a-4380-9768-d307f0d20931'
+
+- task: DotNetCoreCLI@2
+  displayName : "Build projects"
+  inputs:
+    command: 'build'
+    projects: '**/*.csproj'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Run Unit Tests'
+  inputs:
+    command: 'test'
+    projects: '**/*.csproj'
+
+- task: DotNetCoreCLI@2
+  displayName: "Create NuGet Package" 
+  condition: and(succeeded(), eq(variables.isMain, 'true'))
+  inputs:
+    command: 'pack'
+    packagesToPack: '**/*.csproj'
+    versioningScheme: byEnvVar
+    versionEnvVar: PackageVersion
+
+- task: DotNetCoreCLI@2
+  displayName: 'Push NuGet Package to PE-ASOS'
+  condition: and(succeeded(), eq(variables.isMain, 'true'))
+  inputs:
+    command: 'push'
+    packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
+    nuGetFeedType: 'internal'
+    publishVstsFeed: '42ce21be-6d0a-4380-9768-d307f0d20931'
